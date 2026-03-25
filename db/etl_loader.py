@@ -314,6 +314,20 @@ def upsert_zone_map(conn, df: pd.DataFrame):
     log.info(f"  Zone map: upserted {len(data)} node→zone rows")
 
 
+def _to_python(v):
+    """Convert a pandas/numpy scalar to a Python-native type for psycopg2."""
+    if v is None:
+        return None
+    try:
+        if pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if hasattr(v, "item"):           # numpy scalar → Python scalar
+        return v.item()
+    return v
+
+
 def bulk_insert_contracts(conn, df: pd.DataFrame, auction_file_id: int, zone_map: dict):
     """
     Insert contract rows into crr_market_result.
@@ -336,7 +350,7 @@ def bulk_insert_contracts(conn, df: pd.DataFrame, auction_file_id: int, zone_map
 
     rows = []
     for row in df[columns].itertuples(index=False, name=None):
-        rows.append(row)
+        rows.append(tuple(_to_python(v) for v in row))
 
     sql = f"""
         INSERT INTO crr_market_result ({', '.join(columns)})
