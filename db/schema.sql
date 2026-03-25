@@ -152,10 +152,33 @@ CREATE INDEX IF NOT EXISTS idx_ccv_id ON crr_contract_value (id);
 
 
 -- ============================================================
--- 6. POOL SUMMARY VIEW
+-- 6. POOL SUMMARY VIEW  (priority-aware)
 --    The main query surface: total CRR pool by zone + month.
+--
+--    Priority rule:
+--      • If a MONTHLY auction file covers a delivery month → use ONLY that file.
+--      • For months not yet covered by a monthly → use ONLY the latest annual
+--        sequence (Seq1 = lowest sequence_num) for each half-year period.
+--    This prevents double-counting across annual sequences + monthly.
 -- ============================================================
 CREATE OR REPLACE VIEW v_crr_pool_by_zone_month AS
+WITH
+-- Delivery months that have at least one MONTHLY auction file loaded
+monthly_covered AS (
+    SELECT DISTINCT DATE_TRUNC('month', gs)::DATE AS delivery_month
+    FROM auction_file af,
+    LATERAL generate_series(af.delivery_start, af.delivery_end, '1 month'::INTERVAL) AS gs
+    WHERE af.auction_kind = 'MONTHLY'
+),
+-- For each annual half-year period keep only the file with the LOWEST
+-- sequence_num — that is Seq1, the most recent / final auction round.
+latest_annual_file AS (
+    SELECT DISTINCT ON (annual_period_label)
+        id
+    FROM auction_file
+    WHERE auction_kind = 'ANNUAL'
+    ORDER BY annual_period_label, sequence_num ASC
+)
 SELECT
     r.sink_zone,
     DATE_TRUNC('month', gs.delivery_month)::DATE  AS delivery_month,
@@ -177,6 +200,17 @@ JOIN LATERAL (
     )::DATE AS delivery_month
 ) gs ON TRUE
 WHERE r.sink_zone IS NOT NULL
+  AND (
+    -- Monthly auction files: always included (they are canonical)
+    af.auction_kind = 'MONTHLY'
+    OR (
+      -- Annual files: only the latest sequence (Seq1),
+      -- and only for months NOT already covered by a monthly file
+      af.auction_kind = 'ANNUAL'
+      AND af.id IN (SELECT id FROM latest_annual_file)
+      AND gs.delivery_month NOT IN (SELECT delivery_month FROM monthly_covered)
+    )
+  )
 GROUP BY 1, 2, 3, 4;
 
 
