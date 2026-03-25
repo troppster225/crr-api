@@ -1,0 +1,32 @@
+# Large ERCOT data files — download locally, not committed
+*.zip
+rpt.*
+export5580.*
+
+# Output files
+crr_analysis_output.xlsx
+crr_settlement_gaps.csv
+*.xlsx
+
+# Credentials — never committed
+.credentials.md
+*.pem
+*.der
+*.key
+.env
+service_account.json
+token.json
+
+# Runtime / state
+downloads/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.download_state.json
+*.log
+
+# macOS
+.DS_Store
+.claude/
