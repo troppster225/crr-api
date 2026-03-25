@@ -10,10 +10,11 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fast text search on node names
 DO $$ BEGIN
   CREATE TYPE hedge_type_enum  AS ENUM ('OBL', 'OPT');
   CREATE TYPE bid_type_enum    AS ENUM ('BUY', 'SELL');
-  CREATE TYPE crr_type_enum    AS ENUM ('PREAWARD', 'STANDARD');
   CREATE TYPE tou_enum         AS ENUM ('PeakWD', 'PeakWE', 'Off-peak');
   CREATE TYPE auction_kind     AS ENUM ('MONTHLY', 'ANNUAL');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Note: crr_type uses VARCHAR(50) to accommodate all ERCOT CRR type values
+-- (PREAWARD BUY, STANDARD SELL, BASELOAD, CAPACITY, etc.)
 
 
 -- ============================================================
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS auction_file (
     delivery_end         DATE NOT NULL,                -- last delivery month covered
     annual_period_label  VARCHAR(30),                  -- e.g. '2026.1st6', null for monthly
     sequence_num         SMALLINT,                     -- 1-6 for annual, null for monthly
-    source_filename      VARCHAR(300) NOT NULL,
+    source_filename      VARCHAR(300) NOT NULL UNIQUE,
     downloaded_at        TIMESTAMP DEFAULT NOW(),
     loaded_at            TIMESTAMP                     -- set after ETL completes
 );
@@ -101,7 +102,7 @@ CREATE TABLE IF NOT EXISTS crr_market_result (
     account_holder       VARCHAR(30),
     hedge_type           hedge_type_enum,
     bid_type             bid_type_enum,
-    crr_type             crr_type_enum,
+    crr_type             VARCHAR(50),           -- e.g. PREAWARD BUY, STANDARD SELL, BASELOAD, CAPACITY
     source_node          VARCHAR(80) NOT NULL,
     sink_node            VARCHAR(80) NOT NULL,
     start_date           DATE NOT NULL,
