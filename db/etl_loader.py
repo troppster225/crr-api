@@ -384,7 +384,7 @@ def calculate_and_store_values(conn, auction_file_id: int):
         value_rows.append((row_id, hours, round(value, 4)))
 
     sql = """
-        INSERT INTO crr_contract_value (id, column1_hours, column2_value, refreshed_at)
+        INSERT INTO crr_contract_value (id, column1_hours, column2_value)
         VALUES %s
         ON CONFLICT (id) DO UPDATE
             SET column1_hours = EXCLUDED.column1_hours,
@@ -526,6 +526,11 @@ def run_etl(
         except Exception as e:
             log.error(f"  ERROR on {fp.name}: {e}")
             failed += 1
+            # Roll back any aborted transaction so subsequent files can proceed
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
     log.info(f"\nETL complete — loaded: {loaded}  skipped: {skipped}  failed: {failed}")
 
