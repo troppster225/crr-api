@@ -280,41 +280,20 @@ def load_zone_map_from_csv(csv_path: Path) -> pd.DataFrame:
 
 def upsert_auction_file(conn, meta: dict, filename: str) -> int:
     """Insert or update auction_file row. Returns the auction_file.id."""
-    sql = """
-        INSERT INTO auction_file
-            (ercot_doc_id, report_type_id, auction_kind, auction_name,
-             auction_run_date, delivery_start, delivery_end,
-             annual_period_label, sequence_num, source_filename)
-        VALUES
-            (%(doc_id)s, %(report_type_id)s, %(auction_kind)s, %(auction_name)s,
-             %(auction_run_date)s, %(delivery_start)s, %(delivery_end)s,
-             %(annual_period)s, %(sequence_num)s, %(filename)s)
-        ON CONFLICT (source_filename)
-            DO UPDATE SET loaded_at = NULL   -- mark for re-processing
-        RETURNING id
-    """
-    # We use source_filename as the unique key (ercot_doc_id may be missing)
     combined = {**meta, "doc_id": meta.get("doc_id"), "filename": filename}
-    with conn.cursor() as cur:
-        cur.execute(sql.replace("ON CONFLICT (source_filename)",
-                                "ON CONFLICT ON CONSTRAINT auction_file_source_filename_key"), combined)
-    # Fall back if no UNIQUE constraint yet
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO auction_file
                 (ercot_doc_id, report_type_id, auction_kind, auction_name,
                  auction_run_date, delivery_start, delivery_end,
                  annual_period_label, sequence_num, source_filename)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%(doc_id)s, %(report_type_id)s, %(auction_kind)s, %(auction_name)s,
+                    %(auction_run_date)s, %(delivery_start)s, %(delivery_end)s,
+                    %(annual_period)s, %(sequence_num)s, %(filename)s)
             ON CONFLICT (source_filename) DO UPDATE
                 SET loaded_at = NULL
             RETURNING id
-        """, (
-            combined.get("doc_id"), combined["report_type_id"], combined["auction_kind"],
-            combined["auction_name"], combined["auction_run_date"],
-            combined["delivery_start"], combined["delivery_end"],
-            combined["annual_period"], combined["sequence_num"], filename,
-        ))
+        """, combined)
         return cur.fetchone()[0]
 
 
